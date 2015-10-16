@@ -36,6 +36,7 @@ module OAuth2
                   :connection_opts  => {},
                   :connection_build => block,
                   :max_redirects    => 5,
+                  :max_refresh      => 5,
                   :raise_errors     => true}.merge(opts)
       @options[:connection_opts][:ssl] = ssl if ssl
     end
@@ -106,6 +107,11 @@ module OAuth2
         end
         request(verb, response.headers['location'], opts)
       when 200..299, 300..399
+        if response.headers['refresh']
+          opts[:refresh_count] ||= 0
+          opts[:refresh_count] += 1
+          return opts[:refresh_count] > options[:max_refresh] ? response : request(verb, url, opts)
+        end
         # on non-redirecting 3xx statuses, just return the response
         response
       when 400..599

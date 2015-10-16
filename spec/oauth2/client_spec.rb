@@ -7,6 +7,7 @@ describe OAuth2::Client do
   subject do
     OAuth2::Client.new('abc', 'def', :site => 'https://api.example.com') do |builder|
       builder.adapter :test do |stub|
+        refresh_access_cnt = 0
         stub.get('/success')      { |env| [200, {'Content-Type' => 'text/awesome'}, 'yay'] }
         stub.get('/reflect')      { |env| [200, {}, env[:body]] }
         stub.post('/reflect')     { |env| [200, {}, env[:body]] }
@@ -14,6 +15,14 @@ describe OAuth2::Client do
         stub.get('/conflict')     { |env| [409, {'Content-Type' => 'text/plain'}, 'not authorized'] }
         stub.get('/redirect')     { |env| [302, {'Content-Type' => 'text/plain', 'location' => '/success'}, ''] }
         stub.post('/redirect')    { |env| [303, {'Content-Type' => 'text/plain', 'location' => '/reflect'}, ''] }
+        stub.get('/refresh')      do |env|
+          if refresh_access_cnt == 0
+            refresh_access_cnt += 1
+            next [200, {'Content-Type' => 'text/plain', 'refresh' => '0.1'}, '']
+          else
+            next [200, {'Content-Type' => 'text/plain'}, 'yay']
+          end
+        end
         stub.get('/error')        { |env| [500, {'Content-Type' => 'text/plain'}, 'unknown error'] }
         stub.get('/empty_get')    { |env| [204, {}, nil] }
       end
@@ -139,6 +148,11 @@ describe OAuth2::Client do
       expect(response.body).to eq('yay')
       expect(response.status).to eq(200)
       expect(response.headers).to eq('Content-Type' => 'text/awesome')
+    end
+
+    it 'follows refresh header' do
+      response = subject.request(:get, '/refresh')
+      expect(response.body).to eq('yay')
     end
 
     it 'redirects using GET on a 303' do
